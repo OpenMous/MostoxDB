@@ -1,0 +1,76 @@
+##
+# MostoxDB V1 "core-deploy" | IaC example tutorial for microk8s MongoDB + Nginx structure | by mosto 
+##
+# For a IaC in microk8s, you need to define the configuration for the deployment and the service that will orquestate it.
+##
+apiVersion: apps/v1 # microk8s integrated api version for deployments
+kind: Deployment # Type of resource, 'Deployment' makes a container
+metadata:
+  name: mongo # Name for the deployment
+spec:
+  replicas: 1 # Number copies to deploy
+  selector: # The pods controled by this deployment
+    matchLabels:
+      app: mongo # This deployment controls the pods that match with the 'mongo' label
+  template: # Template for crating the pod
+    metadata:
+      labels:
+        app: mongo # Label of the pod
+    spec: # Specs of the pod
+      containers: # Disclaimer: this pod will only have a container, following the rule of service - pod
+        - name: mongo # Container name
+          image: mongo:6 # Container image
+          ports:
+            - containerPort: 27017 # Database port of the pod
+          env: # Set the database root username and password
+            - name: MONGO_INITDB_ROOT_USERNAME
+              value: admin
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              value: admin123 # There's dozens of methods to hash passwords in a microk8s .yaml, not the case
+--- # This separates resources on a same .yaml
+apiVersion: v1 
+kind: Service # This resource configurate comunications between pods
+metadata:
+  name: mongo # Service name, hostname on the cluster
+spec:
+  selector:
+    app: mongo # Trafic of the service will point to pods with the same label 
+  ports: # Port maping:
+    - port: 27017 # Service port
+      targetPort: 27017 # Pod port
+---
+##
+# A IaC microk8s .yaml could (and should) have more than one pod deployment or service defined, like in a docker-compose.
+##
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+spec:
+  type: NodePort
+  selector:
+    app: nginx
+  ports:
+    - port: 80 # Service port
+      targetPort: 80 # Pod port
+      nodePort: 30080 # Node port. This will be the access port for the computer
