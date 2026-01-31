@@ -49,7 +49,6 @@ Add your user to the MicroK8s group:
 
 ```bash
 sudo usermod -a -G microk8s $USER
-newgrp microk8s
 ```
 
 Check cluster status:
