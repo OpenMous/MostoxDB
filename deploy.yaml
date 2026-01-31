@@ -45,6 +45,65 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: node:18-alpine
+          ports:
+            - containerPort: 3000
+          env:
+            - name: MONGO_URL
+              value: mongodb://admin:admin123@mongo:27017
+          command: ["sh", "-c"]
+          args:
+            - |
+              npm init -y &&
+              npm install express mongodb &&
+              cat << 'EOF' > index.js
+              const express = require('express');
+              const { MongoClient } = require('mongodb');
+              const app = express();
+              const url = process.env.MONGO_URL;
+
+              app.get('/api', async (req, res) => {
+                try {
+                  const client = new MongoClient(url);
+                  await client.connect();
+                  res.send('API conectada correctamente a MongoDB');
+                  await client.close();
+                } catch (e) {
+                  res.status(500).send('Error conectando a MongoDB');
+                }
+              });
+
+              app.listen(3000, () => console.log('Backend activo'));
+              EOF
+              node index.js
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 3000
+      targetPort: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
   name: nginx
 spec:
   replicas: 1
@@ -61,6 +120,31 @@ spec:
           image: nginx:alpine
           ports:
             - containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  default.conf: |
+    server {
+      listen 80;
+
+      location / {
+        return 200 "NGINX funcionando\n";
+      }
+
+      location /api {
+        proxy_pass http://backend:3000/api;
+      }
+    }
 ---
 apiVersion: v1
 kind: Service
@@ -71,6 +155,6 @@ spec:
   selector:
     app: nginx
   ports:
-    - port: 80 # Service port
-      targetPort: 80 # Pod port
-      nodePort: 30080 # Node port. This will be the access port for the computer
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
